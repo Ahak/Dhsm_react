@@ -1,8 +1,4 @@
-# TODO List for Adding Sidebar and Navbar
+# TODO: Create Admin Management Pages
 
-- [x] Create Sidebar.js component for seller and admin dashboards
-- [x] Create Navbar.js component for buyer dashboard
-- [x] Update AdminDashboard.js to include Sidebar
-- [x] Update SellerDashboard.js to include Sidebar
-- [x] Update BuyerDashboard.js to include Navbar
-- [x] Update App.css with styles for sidebar and navbar
+## Steps to Complet- [x] Update Dashboard.js: Ensure admin role can access these pages via routing.
+- [x] Test functionality: API calls, permissions, admin-only access.
