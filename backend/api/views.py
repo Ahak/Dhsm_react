@@ -43,6 +43,11 @@ class PropertyViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filter)
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        if request.user.role not in ['seller', 'admin']:
+            return Response({'error': 'Only sellers and admins can create properties'}, status=status.HTTP_403_FORBIDDEN)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         serializer.save(seller=self.request.user)
 
