@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import authenticate
+from django.utils import timezone
 from .models import User, Property, Transaction
 from .serializers import UserSerializer, PropertySerializer, TransactionSerializer
 
@@ -61,29 +62,67 @@ class PropertyViewSet(viewsets.ModelViewSet):
         if request.user.role != 'admin':
             return Response({'error': 'Only admins can approve properties'}, status=status.HTTP_403_FORBIDDEN)
         property = self.get_object()
+        # Prevent approval of already sold properties
+        if property.status == 'sold':
+            return Response({'error': 'Cannot approve a property that has already been sold'}, status=status.HTTP_400_BAD_REQUEST)
         property.status = 'approved'
         property.save()
         return Response({'status': 'Property approved'})
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def purchase(self, request, pk=None):
+        """Initiate a purchase - creates a pending transaction"""
         property = self.get_object()
         if property.status != 'approved':
             return Response({'error': 'Property not available for purchase'}, status=status.HTTP_400_BAD_REQUEST)
         if property.seller == request.user:
             return Response({'error': 'Cannot purchase your own property'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create transaction
+        # Check if there's already a pending transaction for this property
+        existing_transaction = Transaction.objects.filter(property=property, payment_status='pending').first()
+        if existing_transaction:
+            serializer = TransactionSerializer(existing_transaction)
+            return Response(serializer.data)
+
+        # Create transaction with pending payment status (do NOT mark property as sold yet)
         transaction = Transaction.objects.create(
             property=property,
             buyer=request.user,
-            amount=property.price
+            amount=property.price,
+            payment_status='pending'
         )
-        property.status = 'sold'
-        property.save()
 
         serializer = TransactionSerializer(transaction)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def process_payment(self, request, pk=None):
+        """Process payment for a transaction - marks property as sold after payment"""
+        property = self.get_object()
+        
+        # Find the pending transaction for this property
+        transaction = Transaction.objects.filter(property=property, buyer=request.user, payment_status='pending').first()
+        
+        if not transaction:
+            return Response({'error': 'No pending transaction found for this property'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get payment method from request
+        payment_method = request.data.get('payment_method')
+        if not payment_method:
+            return Response({'error': 'Payment method is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update transaction with payment details
+        transaction.payment_method = payment_method
+        transaction.payment_status = 'completed'
+        transaction.payment_date = timezone.now()
+        transaction.save()
+        
+        # Mark property as sold
+        property.status = 'sold'
+        property.save()
+        
+        serializer = TransactionSerializer(transaction)
+        return Response(serializer.data)
 
 class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Transaction.objects.all()
