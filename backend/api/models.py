@@ -37,10 +37,25 @@ class Property(models.Model):
         return self.title
 
 class Transaction(models.Model):
-    property = models.OneToOneField(Property, on_delete=models.CASCADE)
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('mobile_money', 'Mobile Money'),
+        ('card', 'Credit/Debit Card'),
+    ]
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='transactions')
     buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='purchases')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     transaction_date = models.DateTimeField(auto_now_add=True)
+    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='pending')
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
+    payment_date = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.buyer.username} - {self.property.title}"
+
